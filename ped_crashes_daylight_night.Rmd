@@ -64,14 +64,16 @@ read_FARS_no_subfolder <-  function(year, table_type){
   read_sas(paste0("data/", year, "/", table_type, ".sas7bdat"))
 }
 
+# define the years where data does/doesn't live in subfolders
 no_subfolder_years <- c(2000:2005, 2016:2019)
 subfolder_years <- c(2006:2015, 2020:2021)
 
-accident_00 <- read_FARS_no_subfolder(2000, "accident")
+
 ```
-The variable in which the latitude and longitude are being saved and their format varies between years. This requires cleanup.
+The variable in which the latitude and longitude are being saved and their format varies between years. This requires cleanup. 2000 crash data is the most different.
 
 ```{r clean-up-2000}
+accident_00 <- read_FARS_no_subfolder(2000, "accident")
 accident_00 <- accident_00 |> 
   mutate(LATITUDE = na_if(LATITUDE, "88888888"), #remove missing
          LATITUDE = na_if(LATITUDE, "99999999"), #remove missing
@@ -89,6 +91,7 @@ accident_00 <- accident_00 |>
   mutate(across(c(LATITUDE, LONGITUD), ~ as.numeric(.x)))
 ```
 
+For 2001 to 2007, the coordinates are stored in a different variable.
 ```{r}
 accident_01_05 <- map2_dfr(2001:2005, 
                                   "accident", 
@@ -97,43 +100,48 @@ accident_01_05 <- map2_dfr(2001:2005,
 accident_01_05 <- accident_01_05 |> 
   mutate(LATITUDE = latitude,
          LONGITUD = longitud)
-```
 
-```{r}
 accident_06_07 <- map2_dfr(2006:2007, 
                                "accident", 
                                read_FARS_subfolder)
 accident_06_07 <- accident_06_07 |> 
   mutate(LATITUDE = latitude,
          LONGITUD = longitud)
+```
+
+Starting in 2008, the coordinate format is all the same, but there's variability whether the data is in subfolders or not.
+```{r}
 
 accident_08_15 <- map2_dfr(2008:2015, 
                                "accident", 
                                read_FARS_subfolder)
 
-accident_08_15 <- accident_08_15 |> 
-  mutate(LATITUDE = if_else(LATITUDE %in% c(99.9999, 88.8888, 77.7777), NA, LATITUDE),
-         LONGITUD = if_else(LONGITUD %in% c(999.9999, 888.8888, 777.7777), NA, LONGITUD)) 
 
 accident_16_19 <- map2_dfr(2016:2019, 
                                   "accident", 
                                   read_FARS_no_subfolder)
-accident_16_19 <- accident_16_19 |> 
-  mutate(LATITUDE = if_else(LATITUDE %in% c(99.9999, 88.8888, 77.7777), NA, LATITUDE),
-         LONGITUD = if_else(LONGITUD %in% c(999.9999, 888.8888, 777.7777), NA, LONGITUD))
+
 
 accident_20_21 <- map2_dfr(2020:2021, 
                                "accident", 
                                read_FARS_subfolder)
+```
 
-accident_20_21 <- accident_20_21 |> 
-  mutate(LATITUDE = if_else(LATITUDE %in% c(99.9999, 88.8888, 77.7777), NA, LATITUDE),
-         LONGITUD = if_else(LONGITUD %in% c(999.9999, 888.8888, 777.7777), NA, LONGITUD))
+Now we combine all `accident` data frames.
 
-subfolder_years <- c(2006:2015, 2020:2021)
-no_subfolder_years <- c(2000:2005, 2016:2019)
+```{r combine-accidents}
+accident <- bind_rows(accident_00, 
+                      accident_01_05, 
+                      accident_06_07, 
+                      accident_08_15, 
+                      accident_16_19,
+                      accident_20_21)
 
+```
 
+For the `person` data files, the only difference is whether they do or do not use subfolders.
+
+```{r}
 person_no_subfolder <- map2_dfr(no_subfolder_years, 
                                   "person", 
                                   read_FARS_no_subfolder)
@@ -142,13 +150,16 @@ person_subfolder <- map2_dfr(subfolder_years,
                                read_FARS_subfolder)
 
 person <- bind_rows(person_subfolder, person_no_subfolder)
-accident <- bind_rows(acciden)
+```
 
+All these steps take time and so we save the `person` and `accident` data as `rds` files.
+
+```{r eval=FALSE}
 saveRDS(person, file = "data/person.RDS")
 saveRDS(accident, file = "data/accident.RDS")
 
 person <- readRDS("data/person.RDS")
-accident2 <- readRDS("data/accident.RDS")
+accident <- readRDS("data/accident.RDS")
 ```
 
 # Filtering and cleaning the data
@@ -157,20 +168,29 @@ FARS data include all traffic fatalities. We filter the person file to only incl
 ```{r}
 peds <- person |> 
   filter(PER_TYP == 5 & INJ_SEV == 4)
-
-View(x)
 ```
 
-The crash locations are in the `ACCIDENT` table. Not all crashes are geocoded and we remove the ones that aren't.
+The crash locations are in the `ACCIDENT` table. Not all crashes are geocoded:
 
 ```{r}
 accident <- accident |> 
-  filter(LONGITUD < 180 | LATITUDE < 70)
+  mutate(LATITUDE = if_else(LATITUDE %in% c(99.9999, 88.8888, 77.7777), NA, LATITUDE),
+         LONGITUD = if_else(LONGITUD %in% c(999.9999, 888.8888, 777.7777), NA, LONGITUD)) |> 
+  mutate(geocoded = if_else(is.na(LATITUDE), "not geocoded", "geocoded"))
+
+accident |> 
+  group_by(geocoded) |> 
+  tally()
+
+  
 ```
 
-Now we can join the two tables, using the `ST_CASE` identifier.
+We remove any non-geocoded crashes and the join the two tables, using the `ST_CASE` identifier. Note that `ST_CASE` is only unique _within_ a year. Also note that there are `person` entries that don't have a corresponding `accident`. I don't fully understand what type of fatalities those are and will exclude them from analysis.
 
 ```{r}
+accident <- accident |> 
+  filter(geocoded == "geocoded")
+
 peds <- peds |> 
   left_join(accident, by = join_by(ST_CASE, 
                                    MONTH, 
@@ -187,7 +207,7 @@ peds <- peds |>
                                    SCH_BUS))
 ```
 
-The data contain a lot of variables and for now we'll only keep the ones needed for the time of data analysis, speeding up the computations.
+The data contain a lot of variables and for now we'll only keep the ones needed for the time-of-crash analysis.
 
 ```{r}
 variables_for_daylight <- c(
@@ -211,11 +231,11 @@ peds <- peds |>
   select(all_of(variables_for_daylight))
 ```
 
-We filter for crashes that don't contain an exact time or no location. We also parse the date and time fields.
+We filter for crashes that don't contain an exact time. We also parse the date and time fields.
 
 ```{r}
 peds <- peds |> 
-  filter(MINUTE != 99 & !is.na(LATITUDE)) |> #remove crashes with missing time, coords
+  filter(MINUTE != 99 & !is.na(YEAR)) |> 
   mutate(
     crash_time = ymd_hm(paste(YEAR, MONTH, DAY, HOUR, MINUTE, sep = "-")),
     crash_date = ymd(paste(YEAR, MONTH, DAY, sep = "-"))) 
@@ -265,7 +285,9 @@ peds <-  peds |>
 # saveRDS(peds, file = "data/peds_with_sunset.rds")
 # peds <- readRDS("data/peds_with_sunset.rds")
 
+```
 
+```{r}
 peds <- peds |> 
   mutate(time_from_sunrise_0 = crash_time_utc - sunrise_0,
          time_from_sunset_0 = crash_time_utc - sunset_0,
@@ -284,16 +306,20 @@ peds <- peds |>
          )
 
 peds |> 
-  ggplot(aes(as.numeric(time_from_sunset_min, units = "hours"))) +
-  geom_histogram(binwidth = .25) +
+  ggplot(aes(as.numeric(time_from_sunrise_min, units = "hours"))) +
+  geom_histogram(binwidth = 1/60) +
   geom_vline(xintercept = 0, color = "red", alpha = 0.3) +
-  facet_wrap(~YEAR) +
+  # facet_wrap(~YEAR) +
   ylab("Pedestrian fatalities") +
   xlab("Hours from sunrise") +
   labs(title = "Crashes are highly concentrated right after sunset",
        subtitle = "Fatal pedestrian crashes in the US, 2000-2021; 15-minute bins",
        caption = "Data: Fatality Analysis Reporting System (FARS)\nVisualization: Harald Kliems") +
   theme_ipsum(base_family = "Roboto Condensed")
+
+peds |> 
+  ggplot(aes(MINUTE)) +
+  geom_histogram(bins = 60)
 
 x <- peds |> 
   st_drop_geometry() |> 

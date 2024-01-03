@@ -18,7 +18,7 @@ get_fars <- function(year){
   unzip(temp_file, exdir = paste0("data/", year), overwrite = TRUE)
 }
 
-walk(2021, safely(get_fars))
+walk(2000:2021, safely(get_fars))
 
 
 read_FARS <- function(year, table_type){
@@ -131,8 +131,14 @@ peds4 |>
        caption = "Data: Fatality Analysis Reporting System (FARS)\nVisualization: Harald Kliems") +
   theme_ipsum(base_family = "Roboto Condensed")
   
-
-
+library(ggridges)
+peds4 |> 
+  st_drop_geometry() |> 
+  select(crash_time, MONTH, )
+  mutate(int_15_min = cut.POSIXt(x = crash_time, breaks = "15 mins"))
+  group_by(MONTH) |> 
+  ggplot(aes(x = crash_time, y = MONTH)) +
+  geom_density_ridges()
 
 
 x |> 
