@@ -15,47 +15,60 @@ output: distill::distill_article
 knitr::opts_chunk$set(echo = FALSE)
 ```
 
-The United States has a pedestrian fatality crisis.
-After years of progress, the number of people killed while walking started rising again around 2010, contrary to what's happening outside of the US.
+```{r load-libraries}
+library(tidyverse)
+library(haven)
+library(sf)
+library(lutz)
+library(suncalc)
+library(extrafont)
+library(hrbrthemes)
+library(gt)
+options(timeout = 300) # files are large...
+```
+
+There is a pedestrian fatality crisis in the United States After years of progress, the number of people killed while walking started rising again around 2010, contrary to what's happening outside of the US.
 A [recent article in the New York Times](https://www.nytimes.com/interactive/2023/12/11/upshot/nighttime-deaths.html) took a closer look at the fatality data and made a convincing case that the crisis specifically is a crisis happening at night.
 This chart shows the peak of pedestrian fatalities shifting over the course of the year, presumably corresponding with when the sun rises and sets.
 
 ![This chart shows the deadliest time of day for pedestrians, averaging data from 2000 to 2021 over a whole calendar year. Image: New York Times.](img/nyt_chart_deaths_by_time_of_day_and_month.png)
 
-It occurred to me and my friend and fellow data nerd Austin Griessbach that we can explicitly look at sunrise and sunset times and how they correlate with the time of a crash.
-This turned out to be a more complicated process than expected and I document my part of it at the end of the article, in the \@ref(methods-and-code).
-Most people probably won't care about that part though, and so let's dive into our findings.
+It occurred to me and my fellow data nerd Austin Griessbach that we can explicitly look at sunrise and sunset times and how they correlate with the time of a crash.
+This turned out to be a more complicated process than expected and I document my part of it at the end of the article, in the Methods section.
+Most people probably won't care about that though, and so let's dive into our findings.
 
 # The hour after sunset is the worst time for pedestrian deaths
 
-
-
 ```{r}
-#load cleaned data. Data cleaning is documented in Methods section of this article
+# load cleaned data. Data cleaning is documented in Methods section of this article
 peds <- readRDS("data/peds_with_sunset.rds")
-peds <- peds |> 
-   st_drop_geometry()
+peds <- peds |>
+  st_drop_geometry()
 
-peds |> 
-  filter(YEAR >2000) |> 
-  filter(abs(as.numeric(time_from_sunset_min, units = "hours")) < 6.125) |> 
+peds |>
+  filter(YEAR > 2000) |>
+  filter(abs(as.numeric(time_from_sunset_min, units = "hours")) < 6.125) |>
   ggplot(aes(as.numeric(time_from_sunset_min, units = "hours"))) +
-  geom_histogram(binwidth = 1/4) +
+  geom_histogram(binwidth = 1 / 4) +
   geom_vline(xintercept = 0, color = "red", alpha = 0.3, linewidth = 1) +
   # facet_wrap(~YEAR) +
   ylab("Pedestrian fatalities") +
   xlab("Hours from sunset") +
-  labs(title = "Crashes are highly concentrated right after sunset",
-       subtitle = "Fatal pedestrian crashes in the US, 2001-2021; 15-minute bins",
-       caption = "Data: Fatality Analysis Reporting System (FARS)\nVisualization: Harald Kliems") +
+  labs(
+    title = "Crashes are highly concentrated right after sunset",
+    subtitle = "Fatal pedestrian crashes in the US, 2001-2021; 15-minute bins",
+    caption = "Data: Fatality Analysis Reporting System (FARS)\nVisualization: Harald Kliems"
+  ) +
   theme_ipsum(base_family = "Roboto Condensed") +
-  annotate(geom = "text", x = .5, y = 5400, label = "Peak about 20-50\n minutes after sunset", family = "Roboto Condensed" ) +
-    annotate("segment", x = 22.5/60, xend = 52.5/60, y = 4950, yend = 4950,
-           arrow = arrow(ends = "both", angle = 90, length = unit(.2,"cm"))) +
-  annotate(geom = "text", x = -2.8, y = 2000, label = "No marked increase right\nbefore/after sunset", hjust = 0, family = "Roboto Condensed" ) +
-  annotate(geom = "text", x = 3.3, y = 3000, label = "Gradual decline for several           \nhours after sunset", family = "Roboto Condensed" ) +
+  annotate(geom = "text", x = .5, y = 5400, label = "Peak about 20-50\n minutes after sunset", family = "Roboto Condensed") +
+  annotate("segment",
+    x = 22.5 / 60, xend = 52.5 / 60, y = 4950, yend = 4950,
+    arrow = arrow(ends = "both", angle = 90, length = unit(.2, "cm"))
+  ) +
+  annotate(geom = "text", x = -2.8, y = 2000, label = "No marked increase right\nbefore/after sunset", hjust = 0, family = "Roboto Condensed") +
+  annotate(geom = "text", x = 3.3, y = 3000, label = "Gradual decline for several           \nhours after sunset", family = "Roboto Condensed") +
   geom_curve(x = -1, xend = -.05, y = 2000, yend = 800, curvature = -.3, arrow = arrow(type = "closed", length = unit(.2, "cm"))) +
-  geom_curve(x = 1.5, xend = 4.5, y = 3900, yend = 1690, arrow = arrow(type = "closed", length = unit(.2, "cm")), curvature = .2) 
+  geom_curve(x = 1.5, xend = 4.5, y = 3900, yend = 1690, arrow = arrow(type = "closed", length = unit(.2, "cm")), curvature = .2)
 ```
 
 This chart is stunning: The number of fatal pedestrian crashes is fairly flat for several hours before sunset.
@@ -75,28 +88,32 @@ What does the pattern look like for sunrise?
 It is largely a less dramatic version of the sunset chart.
 
 ```{r}
-peds |> 
-  filter(YEAR >2000) |> 
-  filter(abs(as.numeric(time_from_sunrise_min, units = "hours")) < 6.125) |> 
+peds |>
+  filter(YEAR > 2000) |>
+  filter(abs(as.numeric(time_from_sunrise_min, units = "hours")) < 6.125) |>
   ggplot(aes(as.numeric(time_from_sunrise_min, units = "hours"))) +
-  geom_histogram(binwidth = 1/4) +
-    stat_bin(binwidth= 1/4, geom= "text", aes(label=..count..), vjust=-1.5)
-  geom_vline(xintercept = 0, color = "red", alpha = 0.3, linewidth = 1) +
+  geom_histogram(binwidth = 1 / 4) +
+  stat_bin(binwidth = 1 / 4, geom = "text", aes(label = ..count..), vjust = -1.5)
+geom_vline(xintercept = 0, color = "red", alpha = 0.3, linewidth = 1) +
   # facet_wrap(~YEAR) +
   ylab("Pedestrian fatalities") +
   xlab("Hours from sunset") +
-  ylim(c(0,5500)) +
-  labs(title = "Pedestrian fatalities have a less pronounced before sunrise",
-       subtitle = "Fatal pedestrian crashes in the US, 2001-2021; 15-minute bins",
-       caption = "Data: Fatality Analysis Reporting System (FARS)\nVisualization: Harald Kliems") +
+  ylim(c(0, 5500)) +
+  labs(
+    title = "Pedestrian fatalities have a less pronounced before sunrise",
+    subtitle = "Fatal pedestrian crashes in the US, 2001-2021; 15-minute bins",
+    caption = "Data: Fatality Analysis Reporting System (FARS)\nVisualization: Harald Kliems"
+  ) +
   theme_ipsum(base_family = "Roboto Condensed") +
-  annotate(geom = "text", x = -.5, y = 2450, label = "Peak about 20-50\n minutes before sunrise", family = "Roboto Condensed" ) +
-    annotate("segment", x = -22.5/60, xend = -52.5/60, y = 1980, yend = 1980,
-           arrow = arrow(ends = "both", angle = 90, length = unit(.2,"cm"))) +
-  annotate(geom = "text", x = 1.8, y = 2000, label = "Local minimum\naround sunrise", family = "Roboto Condensed" ) +
-  annotate(geom = "text", x = -3.1, y = 1600, label = "Gradual increase starting\n ~2 hours before sunrise", family = "Roboto Condensed" ) +
+  annotate(geom = "text", x = -.5, y = 2450, label = "Peak about 20-50\n minutes before sunrise", family = "Roboto Condensed") +
+  annotate("segment",
+    x = -22.5 / 60, xend = -52.5 / 60, y = 1980, yend = 1980,
+    arrow = arrow(ends = "both", angle = 90, length = unit(.2, "cm"))
+  ) +
+  annotate(geom = "text", x = 1.8, y = 2000, label = "Local minimum\naround sunrise", family = "Roboto Condensed") +
+  annotate(geom = "text", x = -3.1, y = 1600, label = "Gradual increase starting\n ~2 hours before sunrise", family = "Roboto Condensed") +
   geom_curve(x = 1, xend = .05, y = 2000, yend = 800, curvature = .3, arrow = arrow(type = "closed", length = unit(.2, "cm"))) +
-  geom_curve(x = -2.5, xend = -1.1, y = 820, yend = 1700, arrow = arrow(type = "closed", length = unit(.2, "cm")), curvature = .2) 
+  geom_curve(x = -2.5, xend = -1.1, y = 820, yend = 1700, arrow = arrow(type = "closed", length = unit(.2, "cm")), curvature = .2)
 ```
 
 Pedestrian fatalities start increasing about 3 hours before sunset, peak 20-50 minutes before sunset, and rapidly decline right before and after sunset, and then stay relatively flat.
@@ -122,102 +139,119 @@ Breaking down the data by additional variables may help support or rule out poss
 What about differentiating the data by state?
 Here's a our sunrise chart from above, but faceted by state:
 
-```{r}
-state_fips <- tigris::fips_codes |> 
-  distinct(state_code, .keep_all = T) |> 
-  mutate(state_code = as.numeric(state_code)) |> 
+```{r state-facets}
+state_fips <- tigris::fips_codes |>
+  distinct(state_code, .keep_all = T) |>
+  mutate(state_code = as.numeric(state_code)) |>
   select(state_code, state)
 
-peds_state_facets <- peds |> 
-  ungroup() |> 
-  left_join(state_fips, by = join_by(STATE == state_code)) |> 
-  filter(abs(as.numeric(time_from_sunset_min, units = "hours")) < 6.125) |> 
+peds_state_facets <- peds |>
+  ungroup() |>
+  left_join(state_fips, by = join_by(STATE == state_code)) |>
+  filter(abs(as.numeric(time_from_sunset_min, units = "hours")) < 6.125) |>
   mutate(states_binned = fct_lump(state, n = 11))
 
-peds_state_facets|>   
+peds_state_facets |>
   ggplot(aes(as.numeric(time_from_sunset_min, units = "hours"))) +
-  geom_histogram(binwidth = 1/4) +
+  geom_histogram(binwidth = 1 / 4) +
   geom_vline(xintercept = 0, color = "red", alpha = 0.3, linewidth = 1) +
   facet_wrap(~states_binned, scales = "free_y") +
-    ylab("Pedestrian fatalities") +
+  ylab("Pedestrian fatalities") +
   xlab("Hours from sunset") +
-  labs(title = "Pedestrian fatalities around sunset have a similar pattern across US States",
-       subtitle = "Fatal pedestrian crashes in the US, 2001-2021; 15-minute bins",
-       caption = "Data: Fatality Analysis Reporting System (FARS)\nVisualization: Harald Kliems") +
+  labs(
+    title = "Pedestrian fatalities around sunset have a similar pattern across US States",
+    subtitle = "Fatal pedestrian crashes in the US, 2001-2021; 15-minute bins",
+    caption = "Data: Fatality Analysis Reporting System (FARS)\nVisualization: Harald Kliems"
+  ) +
   theme_ipsum(base_family = "Roboto Condensed") +
-  theme(panel.grid.major = element_blank(),
-        panel.grid.minor = element_blank())
+  theme(
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank()
+  )
 ```
 
 The pattern does not differ much by state.
 Note that the y-axis for each state differs in order to better show the pattern; the overall number of pedestrian fatalities vary a lot by state.
 
-```{r}
-peds |> 
-  mutate(label_month = month(MONTH, label = TRUE)) |> 
-    filter(abs(as.numeric(time_from_sunset_min, units = "hours")) < 6.125) |> 
+Another test is to look at the pattern by month.
+
+```{r facet-month}
+peds |>
+  mutate(label_month = month(MONTH, label = TRUE)) |>
+  filter(abs(as.numeric(time_from_sunset_min, units = "hours")) < 6.125) |>
   ggplot(aes(as.numeric(time_from_sunset_min, units = "hours"))) +
-  geom_histogram(binwidth = 1/4) +
+  geom_histogram(binwidth = 1 / 4) +
   geom_vline(xintercept = 0, color = "red", alpha = 0.3, linewidth = .6) +
-  facet_wrap(~ label_month) +
-    ylab("Pedestrian fatalities") +
+  facet_wrap(~label_month) +
+  ylab("Pedestrian fatalities") +
   xlab("Hours from sunset") +
-  labs(title = "Pedestrian fatalities around sunset have a similar pattern throughout the year",
-       subtitle = "Fatal pedestrian crashes in the US, 2001-2021; 15-minute bins",
-       caption = "Data: Fatality Analysis Reporting System (FARS)\nVisualization: Harald Kliems") +
+  labs(
+    title = "Pedestrian fatalities around sunset have a similar pattern throughout the year",
+    subtitle = "Fatal pedestrian crashes in the US, 2001-2021; 15-minute bins",
+    caption = "Data: Fatality Analysis Reporting System (FARS)\nVisualization: Harald Kliems"
+  ) +
   theme_ipsum(base_family = "Roboto Condensed") +
-  theme(panel.grid.major = element_blank(),
-        panel.grid.minor = element_blank())
+  theme(
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank()
+  )
 ```
 
-Another test is to look at the pattern by month.
+
 Again, the overall pattern stays intact.
 From about October to January, the post-sunset peaks appear to be more pronounced, as is the overall number of pedestrian fatalities within 6 hours of sunset.
 This is easier to see on a bar plot, and it probably has something to do with pedestrian and vehicle volumes and when sunset happens: Earlier sunsets mean that the "after" period encompasses rush hour; whereas late sunsets in the summer occur after peak traffic.
 
 ```{r table-month}
-table_month <- peds |> 
-  mutate(label_month = month(MONTH, label = TRUE)) |> 
-    filter(abs(as.numeric(time_from_sunset_min, units = "hours")) < 6) |> 
-  mutate(night = if_else(time_from_sunset_min <= 0, "before", "after")) |> 
-  group_by(label_month, night) |> 
+table_month <- peds |>
+  mutate(label_month = month(MONTH, label = TRUE)) |>
+  filter(abs(as.numeric(time_from_sunset_min, units = "hours")) < 6) |>
+  mutate(night = if_else(time_from_sunset_min <= 0, "before", "after")) |>
+  group_by(label_month, night) |>
   count()
-table_month |> 
+table_month |>
   ggplot(aes(label_month, n, fill = fct_relevel(night, "before", "after"))) +
   geom_col(position = position_dodge()) +
-  labs(fill = "Before/after sunset", title = "Fatal pedestrian crashes before and after sunset",
-       subtitle = "Crashes within 6 hours of sunset",
-       caption = "Data: Fatality Analysis Reporting System (FARS)\nVisualization: Harald Kliems") +
+  labs(
+    fill = "Before/after sunset", title = "Fatal pedestrian crashes before and after sunset",
+    subtitle = "Crashes within 6 hours of sunset",
+    caption = "Data: Fatality Analysis Reporting System (FARS)\nVisualization: Harald Kliems"
+  ) +
   xlab("Month") +
   ylab("Pedestrian fatalities") +
   scale_fill_ipsum() +
   theme_ipsum_rc()
-  
 ```
 
 Finally, we can check if this pattern is new, by separating the data into 5-year periods (which results in not including 2021 data):
 
 ```{r}
-peds |> 
-  mutate(year_period = case_match(YEAR,
-                                  c(2001:2005) ~ "2001-2005",
-                                  c(2006:2010) ~ "2006-2010",
-                                  c(2011:2015) ~ "2011-2015",
-                                  c(2016:2020) ~ "2016-2020")) |> 
-  filter(!is.na(year_period)) |> 
-    filter(abs(as.numeric(time_from_sunset_min, units = "hours")) < 6) |> 
+peds |>
+  mutate(year_period = case_match(
+    YEAR,
+    c(2001:2005) ~ "2001-2005",
+    c(2006:2010) ~ "2006-2010",
+    c(2011:2015) ~ "2011-2015",
+    c(2016:2020) ~ "2016-2020"
+  )) |>
+  filter(!is.na(year_period)) |>
+  filter(abs(as.numeric(time_from_sunset_min, units = "hours")) < 6) |>
   ggplot(aes(as.numeric(time_from_sunset_min, units = "hours"))) +
-  geom_histogram(binwidth = 1/4) +
+  geom_histogram(binwidth = 1 / 4) +
   geom_vline(xintercept = 0, color = "red", alpha = 0.3, linewidth = .6) +
-  facet_wrap(~ year_period) +
-      ylab("Pedestrian fatalities") +
+  facet_wrap(~year_period) +
+  ylab("Pedestrian fatalities") +
   xlab("Hours from sunset") +
-  labs(title = "The pattern of pedestrian fatalities around sunset has not changed much from 2001 to 2020",
-       subtitle = "Fatal pedestrian crashes in the US, 2001-2020; 15-minute bins",
-       caption = "Data: Fatality Analysis Reporting System (FARS)\nVisualization: Harald Kliems") +
+  labs(
+    title = "The pattern of pedestrian fatalities around sunset has not changed much from 2001 to 2020",
+    subtitle = "Fatal pedestrian crashes in the US, 2001-2020; 15-minute bins",
+    caption = "Data: Fatality Analysis Reporting System (FARS)\nVisualization: Harald Kliems"
+  ) +
   theme_ipsum(base_family = "Roboto Condensed") +
-  theme(panel.grid.major.x = element_blank(),
-        panel.grid.minor.x = element_blank())
+  theme(
+    panel.grid.major.x = element_blank(),
+    panel.grid.minor.x = element_blank()
+  )
 ```
 
 Once more, the pattern remains intact.
@@ -227,227 +261,246 @@ But we can see the increase in nighttime pedestrian fatalities in more recent ye
 
 Is what we're seeing a uniquely US phenomenon?
 One country for which we found reasonably good data is Germany.
-Unfortunately, the crash time is made available only down to the hour, making it impossible to do a 1:1 comparison in relation to the sunrise/sunset times. Additionally, only data from 2016-2022 is available. Here's the hourly distribution fatalities to see how German and US pedestrian fatalities compare.
+Unfortunately, the crash time is made available only down to the hour, making it impossible to do a 1:1 comparison in relation to the sunrise/sunset times.
+Additionally, only data from 2016-2022 is available.
+Here's the hourly distribution fatalities to see how German and US pedestrian fatalities compare.
 
 ```{r}
-crashes_de <- readRDS("data/crashes_de.RDS")
+crashes_de_us <- readRDS("data/crashes_de_us.RDS")
 
-us_crashes <- peds |> 
-  sf::st_drop_geometry() |> 
-  mutate(crash_hour = HOUR) |> 
-  filter(YEAR > 2015) |> 
-  group_by(crash_hour) |> 
-  tally() |> 
-  mutate(country = "US")
+crashes_de_us |>
+  group_by(country) |>
+  tally() |>
+  mutate(population = case_when(
+    country == "Germany" ~ 83191000,
+    country == "US" ~ 331449281
+  )) |>
+  rowwise() |>
+  mutate(fatal_per_million = n / population * 1000000) |>
+  gt() |>
+  cols_label(country = "", n = "Fatalities/fatal crashes", population = "Population (2020)", fatal_per_million = "Fatalities/fatal crashes per 1 million") |>
+  fmt_number(fatal_per_million, decimals = 1) |>
+  tab_header(title = "Pedestrian fatalities in the US and in Germany, 2016-2022") |>
+  tab_source_note(source_note = md("Fatality Analysis Reporing System (FARS); Unfallatlas; Wikipedia <br> Data for Germany is the number of fatal _crashes_ involving a pedestrian; US data is number _fatalities_ for pedestrians)"))
+```
 
-de_crashes_fatal <- crashes_de |> 
-  filter(IstFuss == 1) |> 
-  mutate(
-    crash_hour = as.numeric(USTUNDE),
-    crash_type = case_when(UKATEGORIE == 1 ~ "fatal",
-                                UKATEGORIE == 2 ~ "serious injury",
-                                UKATEGORIE == 3 ~ "minor injury"),
-    crash_type = factor(crash_type, levels = c("fatal", "serious injury", "minor injury"), ordered = TRUE),
-    country = "Germany") |> 
-  filter(crash_type == "fatal") |> 
-  group_by(crash_hour, country) |> 
-  tally()
+The overall number of fatal pedestrian crashes in the Germany is, unsurprisingly, a lot lower than in the US.
+This is true both for absolute as population-adjusted numbers.
+The US population in 2020 was 331 million; Germany's was 83 million.
+From 2016 to 2021, Germany had 22 fatal pedestrian crashes per 1 million population; the US had 116 pedestrian fatalities per 1 million population.
 
+But when do those fatal crashes happen, though?
+Here is the chart comparing the two countries.
 
-
-rbind(us_crashes, de_crashes_fatal) |> 
+```{r}
+crashes_de_us |>
+  group_by(country, crash_hour) |>
+  tally() |>
   ggplot(aes(x = crash_hour, n, fill = country)) +
   geom_col() +
   theme_minimal() +
   facet_wrap(~country, scales = "free_y") +
   theme_ipsum_rc() +
   scale_fill_ipsum() +
-  theme(legend.position = "none",
-        plot.caption = ggtext::element_textbox_simple(halign = 0)) +
-  labs(title = "The pattern of fatal pedestrian crashes by time of day differs between the US and Germany",
-       fill = element_blank(),
-       subtitle = "2016-2022 crash data",
-       caption = "Data: Fatality Analysis Reporing System (FARS); Unfallatlas <br> Data for Germany is the number of fatal _crashes_ involving a pedestrian; US data is number _fatalities_ for pedestrians<br>Visualization: Harald Kliems",
-       x = "Time of day",
-       y = "Number of crashes/fatalities") +
-    scale_x_continuous(breaks = c(0, 6, 12, 18))
-
-rbind(us_crashes, de_crashes_fatal) |> 
-  group_by(country) |> 
-  tally(n)
+  theme(
+    legend.position = "none",
+    plot.caption = ggtext::element_textbox_simple(halign = 0)
+  ) +
+  labs(
+    title = "The pattern of fatal pedestrian crashes by time of day differs between the US and Germany",
+    fill = element_blank(),
+    subtitle = "2016-2022 crash data",
+    caption = "Data: Fatality Analysis Reporing System (FARS); Unfallatlas <br> Data for Germany: number of fatal _crashes_ involving a pedestrian; US data: number of _fatalities_ for pedestrians<br>Visualization: Harald Kliems",
+    x = "Time of day",
+    y = "Number of crashes/fatalities"
+  ) +
+  scale_x_continuous(breaks = c(0, 6, 12, 18))
 ```
 
-Not only is the number of pedestrian fatalities in Germany a lot lower than in the US[^1], the distribution across the day also looks quite different.
-The first peak is much later in Germany; the second peak is both earlier and narrower, centered around evening rush hour.
-
-[^1]: To put this in perspective: According to Wikipedia, the US population in 2020 was 331 million; Germany's was 83 million. From 2016 to 2022, Germany had `r round(2139/83)` fatal pedestrian crashes per 1 million population; the US had `r round(38397/331)` pedestrian fatalities.
-
+The distribution across the day definitely looks different.
+While both charts have two peaks, the first peak is much later in Germany, around 10 AM; the second peak is both earlier and narrower in Germany, centered around evening rush hour.
 
 # Conclusion: What is going on??
 
-Austin and I split the data in many other ways to try and elucidate what it going on, and to confirm that we weren't looking at weird artefacts or straight out errors in our code or in the data. At this point were certain enough that the data are correct to publish this post. If you find any errors in the code, please let us know!
+Austin and I split the data in many other ways to try and elucidate what is going on, and to confirm that we weren't looking at weird artefacts or straight up errors in our code or in the data.
+At this point were certain enough that the data are correct to publish this post.
+If you find any errors in the code, please let us know!
 
-As _why_ were seeing what we're seeing: We're still stumped. Why such a rapid increase after (but not before!) sunset? Why is the pattern different in the US than in Germany? We can't say. Additional data would be needed to make progress on an explanation. 
+As to *why* were seeing what we're seeing: We're still stumped.
+Why such a rapid increase after (but not before!) sunset?
+Why is the pattern different in the US than in Germany?
+We can't say.
+Additional data would be needed to make progress on an explanation.
 First and foremost, one would want pedestrian and motor vehicle volume data by time of day, across the year, and for different locations in the US.
 Some of that data may exist in the proprietary databases of companies like Streetlight; some of it could be extrapolated from automated traffic counters.
-But there are going to be many limitations and gaps, especially for pedestrian data and in non-urban areas. 
+But there are going to be many limitations and gaps, especially for pedestrian data and in non-urban areas.
 
+It may also help to look at other crash types, such as fatal crashes *not* involving pedestrians; fatal bike crashes; or non-fatal injury crashes.
+The FARS data only contains fatalities, and while some states make non-fatal crash data available, there are issues with the comparability of the data over time and between states.
+And a lot of data cleaning.
 
-It may also help to look at other crash types, such as fatal crashes _not_ involving pedestrians; fatal bike crashes; or non-fatal injury crashes.
-The FARS data only contains fatalities, and while some states make non-fatal crash data available, there are issues with the comparability of the data over time and between states. And a lot of data cleaning.
-
-For now, we'll leave it to the readers to come up with explanations, based on data or speculation. And maybe publish a follow-up post at a later point.
+For now, we'll leave it to the readers to come up with explanations, based on data or speculation.
+And maybe publish a follow-up post at a later point.
 
 ## Methods
-The following contains and describes the code needed to prepare the data for the plots and tables above. We want our data to be reproducible and open to checking by others. 
 
-# Methods and Code
+The following contains and describes the code needed to prepare the data for the plots and tables above.
+We want our data to be reproducible and open to checking by others.
 
-## Download data
+### Download FARS data
 
 Complete FARS is available as SAS and csv files for download.
 The files are large and downloads regularly time out.
-The structure of the folders and files also has some slight variations between years and therefore reading in the files also requires some effort and multiple functions.
+The structure of the folders and files has slight variations between years and therefore reading in the files requires some effort and multiple functions.
 
-```{r load-libraries}
-library(tidyverse)
-library(haven)
-library(sf)
-library(lutz)
-library(suncalc)
-library(extrafont)
-library(hrbrthemes)
-library(gt)
-options(timeout=300) #files are large...
-```
-
-```{r}
-get_fars <- function(year){
-  fars_url <- paste0("https://static.nhtsa.gov/nhtsa/downloads/FARS/",
-                     year,
-                     "/National/FARS",
-                     year,
-                     "NationalSAS.zip")
+```{r download-fars}
+get_fars <- function(year) {
+  fars_url <- paste0(
+    "https://static.nhtsa.gov/nhtsa/downloads/FARS/",
+    year,
+    "/National/FARS",
+    year,
+    "NationalSAS.zip"
+  )
   temp_file <- tempfile()
   download.file(fars_url, destfile = temp_file)
   unzip(temp_file, exdir = paste0("data/", year), overwrite = TRUE)
 }
 
-walk(2002:2007, safely(get_fars)) #some years will time out and you'll have to try again
-
+walk(2002:2007, safely(get_fars)) # some years will time out and you'll have to try again
 ```
 
 Now that we have the data downloaded, we read in two tables, the `PERSON` and the `ACCIDENT` files.
 Unfortunately the structure of those files varies over time and so joining them isn't that straightforward.
-Additionally, the variables and format for the latitude and longitude are also inconsistent between years.
+We define two functions to read the files.
 
 ```{r}
 # folder structure is inconsistent between years and we need two functions
 # to read in the data
-read_FARS_subfolder <- function(year, table_type){
-  read_sas(paste0("data/", year, "/FARS", year, "NationalSAS/",table_type, ".sas7bdat"))
+read_FARS_subfolder <- function(year, table_type) {
+  read_sas(paste0("data/", year, "/FARS", year, "NationalSAS/", table_type, ".sas7bdat"))
 }
 
-read_FARS_no_subfolder <-  function(year, table_type){
+read_FARS_no_subfolder <- function(year, table_type) {
   read_sas(paste0("data/", year, "/", table_type, ".sas7bdat"))
 }
-
-# define the years where data does/doesn't live in subfolders
-no_subfolder_years <- c(2000:2005, 2016:2019)
-subfolder_years <- c(2006:2015, 2020:2021)
-
-
 ```
 
 The variable in which the latitude and longitude are being saved and their format varies between years.
 This requires cleanup.
 2000 crash data is the most different.
 
-```{r clean-up-2000}
+```{r cleanup-2000}
 accident_00 <- read_FARS_no_subfolder(2000, "accident")
-accident_00 <- accident_00 |> 
-  mutate(LATITUDE = na_if(LATITUDE, "88888888"), #remove missing
-         LATITUDE = na_if(LATITUDE, "99999999"), #remove missing
-         LATITUDE = paste0("-",
-                           str_sub(LATITUDE, start = 0, end = 2),
-                           ".",
-                           str_sub(LATITUDE, start = 3)),
-         LATITUDE = na_if(LATITUDE, "-NA.NA")) |> 
-  mutate(LONGITUD = na_if(LONGITUD, "888888888"),
-         LONGITUD = na_if(LONGITUD, "999999999"),
-         LONGITUD = paste0(str_sub(LONGITUD, start = 0, end = 3),
-                           ".",
-                           str_sub(LONGITUD, start = 4)),
-         LONGITUD = na_if(LONGITUD, "-NA.NA")) |> 
+accident_00 <- accident_00 |>
+  mutate(
+    LATITUDE = na_if(LATITUDE, "88888888"), # remove missing
+    LATITUDE = na_if(LATITUDE, "99999999"), # remove missing
+    LATITUDE = paste0(
+      "-",
+      str_sub(LATITUDE, start = 0, end = 2),
+      ".",
+      str_sub(LATITUDE, start = 3)
+    ),
+    LATITUDE = na_if(LATITUDE, "-NA.NA")
+  ) |>
+  mutate(
+    LONGITUD = na_if(LONGITUD, "888888888"),
+    LONGITUD = na_if(LONGITUD, "999999999"),
+    LONGITUD = paste0(
+      str_sub(LONGITUD, start = 0, end = 3),
+      ".",
+      str_sub(LONGITUD, start = 4)
+    ),
+    LONGITUD = na_if(LONGITUD, "-NA.NA")
+  ) |>
   mutate(across(c(LATITUDE, LONGITUD), ~ as.numeric(.x)))
 ```
 
 For 2001 to 2007, the coordinates are stored in a different variable.
 
-```{r}
-accident_01_05 <- map2_dfr(2001:2005, 
-                                  "accident", 
-                                  read_FARS_no_subfolder)
+```{r cleaup-2001-2007}
+accident_01_05 <- map2_dfr(
+  2001:2005,
+  "accident",
+  read_FARS_no_subfolder
+)
 
-accident_01_05 <- accident_01_05 |> 
-  mutate(LATITUDE = latitude,
-         LONGITUD = longitud)
+accident_01_05 <- accident_01_05 |>
+  mutate(
+    LATITUDE = latitude,
+    LONGITUD = longitud
+  )
 
-accident_06_07 <- map2_dfr(2006:2007, 
-                               "accident", 
-                               read_FARS_subfolder)
-accident_06_07 <- accident_06_07 |> 
-  mutate(LATITUDE = latitude,
-         LONGITUD = longitud)
+accident_06_07 <- map2_dfr(
+  2006:2007,
+  "accident",
+  read_FARS_subfolder
+)
+accident_06_07 <- accident_06_07 |>
+  mutate(
+    LATITUDE = latitude,
+    LONGITUD = longitud
+  )
 ```
 
 Starting in 2008, the coordinate format is all the same, but there's variability whether the data is in subfolders or not.
 
-```{r}
-
-accident_08_15 <- map2_dfr(2008:2015, 
-                               "accident", 
-                               read_FARS_subfolder)
-
-
-accident_16_19 <- map2_dfr(2016:2019, 
-                                  "accident", 
-                                  read_FARS_no_subfolder)
+```{r cleanup-2008-2021}
+accident_08_15 <- map2_dfr(
+  2008:2015,
+  "accident",
+  read_FARS_subfolder
+)
 
 
-accident_20_21 <- map2_dfr(2020:2021, 
-                               "accident", 
-                               read_FARS_subfolder)
+accident_16_19 <- map2_dfr(
+  2016:2019,
+  "accident",
+  read_FARS_no_subfolder
+)
+
+
+accident_20_21 <- map2_dfr(
+  2020:2021,
+  "accident",
+  read_FARS_subfolder
+)
 ```
 
 Now we combine all `accident` data frames.
 
 ```{r combine-accidents}
-accident <- bind_rows(accident_00, 
-                      accident_01_05, 
-                      accident_06_07, 
-                      accident_08_15, 
-                      accident_16_19,
-                      accident_20_21)
-
+accident <- bind_rows(
+  accident_00,
+  accident_01_05,
+  accident_06_07,
+  accident_08_15,
+  accident_16_19,
+  accident_20_21
+)
 ```
 
 For the `person` data files, the only difference is whether they do or do not use subfolders.
 
-```{r}
-person_no_subfolder <- map2_dfr(no_subfolder_years, 
-                                  "person", 
-                                  read_FARS_no_subfolder)
-person_subfolder <- map2_dfr(subfolder_years, 
-                               "person", 
-                               read_FARS_subfolder)
+```{r read-person}
+person_no_subfolder <- map2_dfr(
+  no_subfolder_years,
+  "person",
+  read_FARS_no_subfolder
+)
+person_subfolder <- map2_dfr(
+  subfolder_years,
+  "person",
+  read_FARS_subfolder
+)
 
 person <- bind_rows(person_subfolder, person_no_subfolder)
 ```
 
 All these steps take time and so we save the `person` and `accident` data as `rds` files.
 
-```{r eval=FALSE}
+```{r combine-and-save}
 saveRDS(person, file = "data/person.RDS")
 saveRDS(accident, file = "data/accident.RDS")
 
@@ -455,60 +508,62 @@ person <- readRDS("data/person.RDS")
 accident <- readRDS("data/accident.RDS")
 ```
 
-# Filtering and cleaning the data
+### Filtering and cleaning the data
 
 FARS data include all traffic fatalities.
 We filter the person file to only include cases where the person is a pedestrian and the injury severity is a fatality.
 
-```{r}
-peds <- person |> 
+```{r filter-fatal-peds}
+peds <- person |>
   filter(PER_TYP == 5 & INJ_SEV == 4)
 ```
 
 The crash locations are in the `ACCIDENT` table.
 Not all crashes are geocoded:
 
-```{r}
-accident <- accident |> 
-  mutate(LATITUDE = if_else(LATITUDE %in% c(99.9999, 88.8888, 77.7777), NA, LATITUDE),
-         LONGITUD = if_else(LONGITUD %in% c(999.9999, 888.8888, 777.7777), NA, LONGITUD)) |> 
+```{r determine-geocoded}
+accident <- accident |>
+  mutate(
+    LATITUDE = if_else(LATITUDE %in% c(99.9999, 88.8888, 77.7777), NA, LATITUDE),
+    LONGITUD = if_else(LONGITUD %in% c(999.9999, 888.8888, 777.7777), NA, LONGITUD)
+  ) |>
   mutate(geocoded = if_else(is.na(LATITUDE), "not geocoded", "geocoded"))
 
-accident |> 
-  group_by(geocoded) |> 
+accident |>
+  group_by(geocoded) |>
   tally()
-
-  
 ```
 
 We remove any non-geocoded crashes and the join the two tables, using the `ST_CASE` identifier.
 Note that `ST_CASE` is only unique *within* a year.
 Also note that there are `person` entries that don't have a corresponding `accident`.
-I don't fully understand what type of fatalities those are and will exclude them from analysis.
+We don't fully understand what type of fatalities those are and will exclude them from analysis.
 
-```{r}
-accident <- accident |> 
+```{r filter-geocoded-and-join}
+accident <- accident |>
   filter(geocoded == "geocoded")
 
-peds <- peds |> 
-  left_join(accident, by = join_by(ST_CASE, 
-                                   MONTH, 
-                                   DAY, 
-                                   HOUR, 
-                                   MINUTE,
-                                   STATE,
-                                   VE_FORMS,
-                                   COUNTY,
-                                   RUR_URB,
-                                   FUNC_SYS,
-                                   HARM_EV,
-                                   MAN_COLL,
-                                   SCH_BUS))
+peds <- peds |>
+  left_join(accident, by = join_by(
+    ST_CASE,
+    MONTH,
+    DAY,
+    HOUR,
+    MINUTE,
+    STATE,
+    VE_FORMS,
+    COUNTY,
+    RUR_URB,
+    FUNC_SYS,
+    HARM_EV,
+    MAN_COLL,
+    SCH_BUS
+  ))
 ```
 
 The data contain a lot of variables and for now we'll only keep the ones needed for the time-of-crash analysis.
 
-```{r}
+```{r filter-variable}
 variables_for_daylight <- c(
   "STATE",
   "ST_CASE",
@@ -526,47 +581,49 @@ variables_for_daylight <- c(
   "LONGITUD"
 )
 
-peds <- peds |> 
+peds <- peds |>
   select(all_of(variables_for_daylight))
 ```
 
 We filter for crashes that don't contain an exact time.
 We also parse the date and time fields.
 
-```{r}
-peds <- peds |> 
-  filter(MINUTE != 99 & !is.na(YEAR)) |> 
+```{r parse-date-time}
+peds <- peds |>
+  filter(MINUTE != 99 & !is.na(YEAR)) |>
   mutate(
     crash_time = ymd_hm(paste(YEAR, MONTH, DAY, HOUR, MINUTE, sep = "-")),
-    crash_date = ymd(paste(YEAR, MONTH, DAY, sep = "-"))) 
+    crash_date = ymd(paste(YEAR, MONTH, DAY, sep = "-"))
+  )
 ```
 
 Next we need to deal with time and time zones.
 The crash time and date in FARS appear to be stored as the local time, with no time zone information.
 We will use the latitude and longitude to look up the time zone and then convert all times into UTC.
 
-```{r}
+```{r time-zones}
 # create sf object
-peds <- st_as_sf(peds, coords = c("LONGITUD", "LATITUDE"), remove = FALSE) #keep lat/lon columns    
+peds <- st_as_sf(peds, coords = c("LONGITUD", "LATITUDE"), remove = FALSE) # keep lat/lon columns
 peds$tz <- tz_lookup(peds, method = "accurate")
 
 # Function to convert times to UTC
 convert_to_utc <- function(datetime, timezone) {
   # Set the time zone of the datetime object
-  datetime <- force_tz(datetime, tzone = timezone) #assign time zone
-  
+  datetime <- force_tz(datetime, tzone = timezone) # assign time zone
+
   # Convert the datetime to UTC
-  datetime_utc <- with_tz(datetime, tzone = "UTC") #convert to time zone
-  
+  datetime_utc <- with_tz(datetime, tzone = "UTC") # convert to time zone
+
   return(as_datetime(datetime_utc))
 }
 
 peds$crash_time_utc <- mapply(convert_to_utc, datetime = peds$crash_time, timezone = peds$tz)
 
-peds <- peds |> 
-  mutate(crash_time_utc = as_datetime(crash_time_utc),
-         crash_date_utc = date(crash_time_utc))
-
+peds <- peds |>
+  mutate(
+    crash_time_utc = as_datetime(crash_time_utc),
+    crash_date_utc = date(crash_time_utc)
+  )
 ```
 
 Based on the new UTC times we can now calculate sunrise and sunsets for all crashes.
@@ -574,117 +631,53 @@ This was more complicated than I thought: Once we get to calculating the time to
 So we calculate the sunrise/sunset for the day before the crash, the day of the crash, and the day after, and then use the minimum difference.
 (I feel there must be a simpler way to do this...)
 
-```{r}
-peds <-  peds |> 
-  rowwise() |> 
-  mutate(sun_0 = getSunlightTimes(date = crash_date, lat = LATITUDE, lon = LONGITUD),
-         sun_plus_1 = getSunlightTimes(date = crash_date + 1, lat = LATITUDE, lon = LONGITUD),
-         sun_minus_1 = getSunlightTimes(date = crash_date - 1, lat = LATITUDE, lon = LONGITUD),
-         sunrise_0 = sun_0$sunrise,
-         sunrise_plus_1 = sun_plus_1$sunrise,
-         sunrise_minus_1 = sun_minus_1$sunrise,
-         sunset_0 = sun_0$sunset,
-         sunset_plus_1 = sun_plus_1$sunset,
-         sunset_minus_1 = sun_minus_1$sunset)
-
+```{r calculcate-sun}
+peds <- peds |>
+  rowwise() |>
+  mutate(
+    sun_0 = getSunlightTimes(date = crash_date, lat = LATITUDE, lon = LONGITUD),
+    sun_plus_1 = getSunlightTimes(date = crash_date + 1, lat = LATITUDE, lon = LONGITUD),
+    sun_minus_1 = getSunlightTimes(date = crash_date - 1, lat = LATITUDE, lon = LONGITUD),
+    sunrise_0 = sun_0$sunrise,
+    sunrise_plus_1 = sun_plus_1$sunrise,
+    sunrise_minus_1 = sun_minus_1$sunrise,
+    sunset_0 = sun_0$sunset,
+    sunset_plus_1 = sun_plus_1$sunset,
+    sunset_minus_1 = sun_minus_1$sunset
+  )
 ```
 
-```{r}
-peds <- peds |> 
-  mutate(time_from_sunrise_0 = crash_time_utc - sunrise_0,
-         time_from_sunset_0 = crash_time_utc - sunset_0,
-         time_from_sunrise_minus_1 = crash_time_utc - sunrise_minus_1,
-         time_from_sunset_minus_1 = crash_time_utc - sunset_minus_1,
-         time_from_sunrise_plus_1 = crash_time_utc - sunrise_plus_1,
-         time_from_sunset_plus_1 = crash_time_utc - sunset_plus_1,
-         time_from_sunrise_min = case_when(
-           min(abs(time_from_sunrise_0), abs(time_from_sunrise_minus_1), abs(time_from_sunrise_plus_1)) == abs(time_from_sunrise_0) ~ time_from_sunrise_0, 
-           min(abs(time_from_sunrise_0), abs(time_from_sunrise_minus_1), abs(time_from_sunrise_plus_1)) == abs(time_from_sunrise_minus_1) ~ time_from_sunrise_minus_1,
-           min(abs(time_from_sunrise_0), abs(time_from_sunrise_minus_1), abs(time_from_sunrise_plus_1)) == abs(time_from_sunrise_plus_1) ~ time_from_sunrise_plus_1),
-         time_from_sunset_min = case_when(
-           min(abs(time_from_sunset_0), abs(time_from_sunset_minus_1), abs(time_from_sunset_plus_1)) == abs(time_from_sunset_0) ~ time_from_sunset_0, 
-           min(abs(time_from_sunset_0), abs(time_from_sunset_minus_1), abs(time_from_sunset_plus_1)) == abs(time_from_sunset_minus_1) ~ time_from_sunset_minus_1,
-           min(abs(time_from_sunset_0), abs(time_from_sunset_minus_1), abs(time_from_sunset_plus_1)) == abs(time_from_sunset_plus_1) ~ time_from_sunset_plus_1)
-         )
+```{r calculate-time-from-sun}
+peds <- peds |>
+  mutate(
+    time_from_sunrise_0 = crash_time_utc - sunrise_0,
+    time_from_sunset_0 = crash_time_utc - sunset_0,
+    time_from_sunrise_minus_1 = crash_time_utc - sunrise_minus_1,
+    time_from_sunset_minus_1 = crash_time_utc - sunset_minus_1,
+    time_from_sunrise_plus_1 = crash_time_utc - sunrise_plus_1,
+    time_from_sunset_plus_1 = crash_time_utc - sunset_plus_1,
+    time_from_sunrise_min = case_when(
+      min(abs(time_from_sunrise_0), abs(time_from_sunrise_minus_1), abs(time_from_sunrise_plus_1)) == abs(time_from_sunrise_0) ~ time_from_sunrise_0,
+      min(abs(time_from_sunrise_0), abs(time_from_sunrise_minus_1), abs(time_from_sunrise_plus_1)) == abs(time_from_sunrise_minus_1) ~ time_from_sunrise_minus_1,
+      min(abs(time_from_sunrise_0), abs(time_from_sunrise_minus_1), abs(time_from_sunrise_plus_1)) == abs(time_from_sunrise_plus_1) ~ time_from_sunrise_plus_1
+    ),
+    time_from_sunset_min = case_when(
+      min(abs(time_from_sunset_0), abs(time_from_sunset_minus_1), abs(time_from_sunset_plus_1)) == abs(time_from_sunset_0) ~ time_from_sunset_0,
+      min(abs(time_from_sunset_0), abs(time_from_sunset_minus_1), abs(time_from_sunset_plus_1)) == abs(time_from_sunset_minus_1) ~ time_from_sunset_minus_1,
+      min(abs(time_from_sunset_0), abs(time_from_sunset_minus_1), abs(time_from_sunset_plus_1)) == abs(time_from_sunset_plus_1) ~ time_from_sunset_plus_1
+    )
+  )
 
 # saveRDS(peds, file = "data/peds_with_sunset.rds")
 ```
 
-```{r}
-peds |> 
-  ggplot(aes(MINUTE)) +
-  geom_histogram(bins = 60)
+### German crash data
 
-x <- peds |> 
-  st_drop_geometry() |> 
-  mutate(minutes_since_midnight = HOUR*60 + MINUTE,
-         int_15_min = cut(minutes_since_midnight, breaks = seq(1, 1440, by = 15)),
-         int_
-    )
-
-x |> 
-  group_by(int_15_min, MONTH) |> 
-  summarize(n = n()) |> 
-  group_by(MONTH) |> 
-  mutate(highlight = ifelse(n == max(n), "yes", "no")) |> 
-  ggplot(aes(int_15_min, n)) +
-  geom_point() +
-  facet_wrap(~MONTH, ncol = 1) +
-  gghighlight::gghighlight(highlight == "yes", calculate_per_facet = TRUE,use_direct_label = FALSE) +
-  theme_minimal()
-  
-peds |> 
-  # left_join(state_fips, by = join_by(STATE.x == state_code)) |> 
-  ggplot(aes(as.numeric(time_from_sunset_min, units = "hours"))) +
-  geom_histogram(binwidth = .25) +
-  geom_vline(xintercept = 0, color = "red", alpha = 0.3) +
-  # facet_wrap(~YEAR) +
-  ylab("Pedestrian fatalities") +
-  xlab("Hours from sunset") +
-  labs(title = "Crashes are highly concentrated right after sunset",
-       subtitle = "Fatal pedestrian crashes in the US, 2016-2021; 15-minute bins",
-       caption = "Data: Fatality Analysis Reporting System (FARS)\nVisualization: Harald Kliems") +
-  theme_ipsum(base_family = "Roboto Condensed")
-
-```
-
-# Connecting crashes to census data
-
-```{r}
-library(tigris)
-options(tigris_use_cache = TRUE)
-library(tidycensus)
-```
-
-```{r}
-get_block_groups <- function(state, year){
-  block_groups <- block_groups(state = state, year = year, cb = TRUE)
-}
-
-states <- unique(peds$STATE)
-
-
-states_years <- expand_grid(state = states, year = 2013:2014)
-
-# states_years |> 
-#   rowwise() |> 
-#   map2_dfr(~ get_block_groups(state = states_years$state, year = states_years$year))
-
-states_geo_13_20 <- pmap(states_years, get_block_groups)
-
-```
-
-# German crashes
-
-Available from <https://unfallatlas.statistikportal.de/>
-
-Documentation: <https://www.opengeodata.nrw.de/produkte/transport_verkehr/unfallatlas/DSB_Unfallatlas_EN.pdf>
-
-Coordinates are in `LINREFX` and `LINREFY`
-
+Crash data for 2016 to 2022 are available from <https://unfallatlas.statistikportal.de/>, and it's documented (in English) here [<https://www.opengeodata.nrw.de/produkte/transport_verkehr/unfallatlas/DSB_Unfallatlas_EN.pdf>].
 Unfortunately, the minute of the crash is not included in the data.
+We download the data to a folder, read it in, and save it for future use as an RDS file.
 
-```{r}
+```{r read-de-crashes}
 read_de_crashes <- function(crash_file) {
   read_delim(crash_file, delim = ";")
 }
@@ -694,102 +687,40 @@ crash_files <- list.files("data/de", full.names = TRUE)
 crashes_de <- map_dfr(crash_files, read_de_crashes)
 
 saveRDS(crashes_de, "data/crashes_de.RDS")
-
-
-
-crashes_de |> 
-  filter(IstFuss == 1) |> 
-  mutate(
-    crash_hour = as.numeric(USTUNDE),
-    crash_type = case_when(UKATEGORIE == 1 ~ "fatal",
-                                UKATEGORIE == 2 ~ "serious injury",
-                                UKATEGORIE == 3 ~ "minor injury"),
-    crash_type = factor(crash_type, levels = c("fatal", "serious injury", "minor injury"), ordered = TRUE)) |> 
-  group_by(crash_hour, crash_type) |> 
-  tally() |> 
-  ggplot(aes(crash_hour, n)) +
-  geom_col() +
-  facet_wrap(~ crash_type, scales = "free_y") +
-  hrbrthemes::theme_ipsum_rc() +
-  labs(title = "Crashes involving pedestrians by time of crash and crash severity",
-       subtitle = "Crashes in Germany, 2016-2022",
-       caption = "Data: https://unfallatlas.statistikportal.de/\nVisualization: Harald Kliems",
-       x = "Time of day",
-       y = "Number of crashes") +
-  scale_x_continuous(breaks = c(0, 6, 12, 18))
-
 ```
 
+Crashes involving pedestrians are coded with `IstFuss == 1` and fatal crashes are coded as `UKATEGORIE == 1`.
+We filter accordingly and then combine with the US fatal pedestrian crash data.
+Note that the US data has one row for every pedestrian fatality, whereas the German data has one row per crash.
+This may lead to minor difference, e.g regarding crashes that kill multiple pedestrians, or crashes that involve a pedestrian, but it's not the pedestrian who is killed.
+Overall, these differences are probably fairly minor.
+To make the time periods comparable, we limit the data to 2016-2021.
 
-```{r}
-
-us_crashes <- peds |> 
-  sf::st_drop_geometry() |> 
-  mutate(crash_hour = HOUR,
-         country = "US") |> 
-  filter(YEAR > 2015) |> 
+```{r combine-de-us-crashes}
+us_crashes <- peds |>
+  sf::st_drop_geometry() |>
+  mutate(
+    crash_hour = HOUR,
+    country = "US"
+  ) |>
+  filter(YEAR > 2015) |>
   select(crash_hour, country)
 
-de_crashes_fatal <- crashes_de |> 
-  filter(IstFuss == 1) |> 
+de_crashes_fatal <- crashes_de |>
+  filter(IstFuss == 1 & UJAHR < 2022) |>
   mutate(
     crash_hour = as.numeric(USTUNDE),
-    crash_type = case_when(UKATEGORIE == 1 ~ "fatal",
-                                UKATEGORIE == 2 ~ "serious injury",
-                                UKATEGORIE == 3 ~ "minor injury"),
+    crash_type = case_when(
+      UKATEGORIE == 1 ~ "fatal",
+      UKATEGORIE == 2 ~ "serious injury",
+      UKATEGORIE == 3 ~ "minor injury"
+    ),
     crash_type = factor(crash_type, levels = c("fatal", "serious injury", "minor injury"), ordered = TRUE),
-    country = "Germany") |> 
-  filter(crash_type == "fatal") |> 
+    country = "Germany"
+  ) |>
+  filter(crash_type == "fatal") |>
   select(crash_hour, country)
 
-rbind(us_crashes, de_crashes_fatal) |> 
-  ggplot(aes(crash_hour, country, fill = country)) +
-  ggridges::geom_density_ridges(rel_min_height = 0.01, scale = 8, alpha = 0.3) +
-  theme_minimal() +
-  xlim(c(0, 24))
-```
-
-Density plots would be nice for the data, but they are not straighforward for circular, 24h data.
-
-```{r}
-# modified code from https://freakonometrics.hypotheses.org/2239
-
-library(dplyr)
-library(ggplot2)
-library(lubridate)
-library(circular)
-
-df = read.csv("data.csv")
-
-
-circ_data <- rbind(us_crashes, de_crashes_fatal) |> 
-  mutate(half_hour = paste0(crash_hour,":30"),
-         half_hour_time = hm(half_hour),
-         times_in_decimal = crash_hour/60,
-         times_in_radians = 2 * pi * (times_in_decimal / 24))
-
-datetimes = df$timestamp %>%
-  lubridate::parse_date_time("%m/%d/%Y %h:%M")
-times_in_decimal = lubridate::hour(datetimes) + lubridate::minute(datetimes) / 60
-times_in_radians = 2 * pi * (times_in_decimal / 24)
-
-# Doing this just for bandwidth estimation:
-basic_dens = density(times_in_radians, from = 0, to = 2 * pi)
-
-res = circular::density.circular(circular::circular(times_in_radians,
-                                                    type = "angle",
-                                                    units = "radians",
-                                                    rotation = "clock"),
-                                 kernel = "wrappednormal",
-                                 bw = basic_dens$bw)
-
-time_pdf = data.frame(time = as.numeric(24 * (2 * pi + res$x) / (2 * pi)), # Convert from radians back to 24h clock
-                      likelihood = res$y)
-
-p = ggplot(time_pdf) +
-  geom_area(aes(x = time, y = likelihood), fill = "#619CFF") +
-  scale_x_continuous("Hour of Day", labels = 0:24, breaks = 0:24) +
-  scale_y_continuous("Likelihood of Data") +
-  theme_classic()
-
+crashes_de_us <- rbind(us_crashes, de_crashes_fatal)
+saveRDS(crashes_de_us, file = "data/crashes_de_us.RDS")
 ```
