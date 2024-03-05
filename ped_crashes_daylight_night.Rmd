@@ -6,7 +6,7 @@ author:
   - name: Harald Kliems 
     orcid_id: 0000-0003-2542-0047
     url: https://haraldkliems.netlify.app/
-  - name: Austin Griessbach
+  - name: Austin Griesbach
 date: "2024-02-29"
 creative_commons: CC BY-SA
 categories:
@@ -42,7 +42,7 @@ This chart shows the peak of pedestrian fatalities shifting over the course of t
 
 ![This chart shows the deadliest time of day for pedestrians, averaging data from 2000 to 2021 over a whole calendar year. Image: New York Times.](img/nyt_chart_deaths_by_time_of_day_and_month.png){width=70%}
 
-It occurred to me and my fellow data nerd Austin Griessbach that we can explicitly look at sunrise and sunset times and how they correlate with the time of a crash.
+It occurred to me and my fellow data nerd Austin Griesbach that we can explicitly look at sunrise and sunset times and how they correlate with the time of a crash.
 This turned out to be a more complicated process than expected and I document my part of it at the end of the article, in the Methods section.
 Most people probably won't care about that though, and so let's dive into our findings.
 
